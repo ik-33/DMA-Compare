@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import io
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
@@ -80,6 +81,57 @@ if file_a and file_b:
         loss_b_i = interpolate_and_smooth(log_freq_b, loss_b)
         tan_a_i = interpolate_and_smooth(log_freq_a, tan_a)
         tan_b_i = interpolate_and_smooth(log_freq_b, tan_b)
+        
+        #excel file download
+        def create_excel_download(
+            common_freq,
+            smoothed_storage_A, smoothed_loss_A, smoothed_tan_A,
+            smoothed_storage_B, smoothed_loss_B, smoothed_tan_B,
+            curve_name_A, curve_name_B
+        ):
+            # Compute % difference: (B - A) / A * 100
+            percent_diff_storage = (smoothed_storage_B - smoothed_storage_A) / smoothed_storage_A * 100
+            percent_diff_loss = (smoothed_loss_B - smoothed_loss_A) / smoothed_loss_A * 100
+            percent_diff_tan = (smoothed_tan_B - smoothed_tan_A) / smoothed_tan_A * 100
+
+            df_out = pd.DataFrame({
+                "Frequency (Hz)": common_freq,
+
+                f"{curve_name_A} Storage Modulus": smoothed_storage_A,
+                f"{curve_name_B} Storage Modulus": smoothed_storage_B,
+                "% Diff Storage Modulus": percent_diff_storage,
+
+                f"{curve_name_A} Loss Modulus": smoothed_loss_A,
+                f"{curve_name_B} Loss Modulus": smoothed_loss_B,
+                "% Diff Loss Modulus": percent_diff_loss,
+
+                f"{curve_name_A} Tan Delta": smoothed_tan_A,
+                f"{curve_name_B} Tan Delta": smoothed_tan_B,
+                "% Diff Tan Delta": percent_diff_tan,
+            })
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_out.to_excel(writer, index=False, sheet_name='TTS Comparison')
+
+            output.seek(0)
+            return output
+
+        # call excel download function
+        excel_file = create_excel_download(
+            common_log_freq,
+            stor_a_i, loss_a_i, tan_a_i,
+            stor_b_i, loss_b_i, tan_b_i,
+            label_a, label_b
+        )
+
+        # Download Button
+        st.download_button(
+            label = "Download Smoothed & % Difference Data (Excel)",
+            data = excel_file,
+            file_name = f"{label_a}_vs_{label_b}_comparison.xlsx",
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         # Percent difference
         def percent_diff(a, b):
@@ -115,3 +167,7 @@ if file_a and file_b:
 
     except Exception as e:
         st.error(f"Error while processing files: {e}")
+
+
+# to run in command line type:
+# streamlit run dma_compare_app.py
