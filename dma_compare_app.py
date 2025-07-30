@@ -93,9 +93,13 @@ if file_a and file_b:
             percent_diff_storage = (smoothed_storage_B - smoothed_storage_A) / smoothed_storage_A * 100
             percent_diff_loss = (smoothed_loss_B - smoothed_loss_A) / smoothed_loss_A * 100
             percent_diff_tan = (smoothed_tan_B - smoothed_tan_A) / smoothed_tan_A * 100
-
+            
+            #undo log(frequency)
+            common_freq_hz = 10**common_freq
+            
+            #Full smoothed curve & % diff values
             df_out = pd.DataFrame({
-                "Frequency (Hz)": common_freq,
+                "Frequency (Hz)": common_freq_hz,
 
                 f"{curve_name_A} Storage Modulus": smoothed_storage_A,
                 f"{curve_name_B} Storage Modulus": smoothed_storage_B,
@@ -109,10 +113,25 @@ if file_a and file_b:
                 f"{curve_name_B} Tan Delta": smoothed_tan_B,
                 "% Diff Tan Delta": percent_diff_tan,
             })
+            
+            # Summary at specific frequencies
+            target_freqs = np.array([1e-3, 1e-2, 1e-1, 1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7])
+
+            interp_storage = interp1d(common_freq_hz, percent_diff_storage, kind='linear', bounds_error=False, fill_value=np.nan)
+            interp_loss = interp1d(common_freq_hz, percent_diff_loss, kind='linear', bounds_error=False, fill_value=np.nan)
+            interp_tan = interp1d(common_freq_hz, percent_diff_tan, kind='linear', bounds_error=False, fill_value=np.nan)
+
+            df_summary = pd.DataFrame({
+                "Frequency (Hz)": target_freqs,
+                "% Diff Storage Modulus": interp_storage(target_freqs),
+                "% Diff Loss Modulus": interp_loss(target_freqs),
+                "% Diff Tan Delta": interp_tan(target_freqs)
+            })
 
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_out.to_excel(writer, index=False, sheet_name='TTS Comparison')
+                df_summary.to_excel(writer, index=False, sheet_name='Summary % Difference')
 
             output.seek(0)
             return output
